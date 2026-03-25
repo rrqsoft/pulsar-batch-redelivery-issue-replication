@@ -1,0 +1,28 @@
+{
+  "name": "pulsar-batch-delivery-replication",
+  "version": "1.0.0",
+  "description": "Replication script for Pulsar batch acknowledgment issue #5969",
+  "main": "producer.js",
+  "type": "module",
+  "scripts": {
+    "producer": "node producer.js",
+    "worker": "node worker.js",
+    "wait": "node wait-for-pulsar.js",
+    "start": "npm run wait && pm2 start pm2.config.cjs",
+    "start:force": "pm2 start pm2.config.cjs",
+    "stop": "pm2 stop pm2.config.cjs",
+    "restart": "pm2 restart pm2.config.cjs",
+    "delete": "pm2 delete pm2.config.cjs",
+    "logs": "pm2 logs",
+    "status": "pm2 status",
+    "pulsar:up": "docker-compose up -d",
+    "pulsar:down": "docker-compose down",
+    "pulsar:logs": "docker-compose logs -f pulsar"
+  },
+  "dependencies": {
+    "pulsar-client": "1.12.0"
+  },
+  "devDependencies": {
+    "pm2": "^5.3.0"
+  }
+}
