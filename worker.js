@@ -84,7 +84,11 @@ async function main() {
                     // Check for duplicates
                     const previousProcessing = processedMessages.get(msgId);
                     if (previousProcessing) {
-                        log(`  ⚠️  DUPLICATE DETECTED: ${msgId}`);
+                        if(msgId === 'msg-3') {
+                            log(`✓   nAcked messaged is detected: ${msgId}`);
+                        } else {
+                            log(`⚠️  DUPLICATE DETECTED: ${msgId}`);
+                        }
                         log(`      First processed at: ${previousProcessing.timestamp}`);
                         log(`      First processed by: Worker ${previousProcessing.workerId}`);
                         log(`      Redelivered after: ${Date.now() - previousProcessing.processedAt}ms`);
