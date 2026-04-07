@@ -65,7 +65,7 @@
         <h2>📊 Executive Summary</h2>
         
         <div class="error">
-            <strong>Root Cause Confirmed:</strong> Pulsar broker configured with <code>acknowledgmentAtBatchIndexLevelEnabled=false</code> tracks acknowledgments at the <strong>batch level</strong> instead of individual message level. When any message in a producer batch is negatively acknowledged, the entire batch is marked as unacknowledged and redelivered to another worker, causing duplicate processing of already-acknowledged messages.
+            <strong>Root Cause Confirmed:</strong> Pulsar broker configured with <code>acknowledgmentAtBatchIndexLevelEnabled=false</code> or <code>batchIndexAckEnabled=false</code>  tracks acknowledgments at the <strong>batch level</strong> instead of individual message level. When any message in a producer batch is negatively acknowledged, the entire batch is marked as unacknowledged and redelivered to another worker, causing duplicate processing of already-acknowledged messages.
         </div>
 
         <div class="success">
@@ -237,7 +237,7 @@
 
         <h3>The Problem: Batch-Level Acknowledgment Tracking</h3>
 
-        <p>When <code>acknowledgmentAtBatchIndexLevelEnabled=false</code> on the Pulsar broker, the broker tracks acknowledgments at the <strong>batch level</strong>, not individual message level. This causes the following behavior:</p>
+        <p>When <code>acknowledgmentAtBatchIndexLevelEnabled=false</code> or <code>batchIndexAckEnabled=false</code>s on the Pulsar broker, the broker tracks acknowledgments at the <strong>batch level</strong>, not individual message level. This causes the following behavior:</p>
 
         <div class="diagram">
             <div class="flow-step">Producer sends 5 messages</div>
@@ -301,7 +301,7 @@
         <p>Based on <a href="https://github.com/apache/pulsar/pull/6052" target="_blank">PR #6052</a> (PIP-54: Support acknowledgment at batch index level):</p>
 
         <div class="code-block">
-// WITHOUT batch index ack (acknowledgmentAtBatchIndexLevelEnabled=false)
+// WITHOUT batch index ack (batchIndexAckEnabled=false, acknowledgmentAtBatchIndexLevelEnabled=false)
 Broker Cursor Tracking:
   Entry (ledgerId:123, entryId:456) → Status: UNACKED (entire batch)
   ↓
@@ -309,7 +309,7 @@ Broker Cursor Tracking:
     - Entire entry marked as unacked
     - All 5 messages redelivered
 
-// WITH batch index ack (acknowledgmentAtBatchIndexLevelEnabled=true)
+// WITH batch index ack (batchIndexAckEnabled=true, acknowledgmentAtBatchIndexLevelEnabled=true)
 Broker Cursor Tracking:
   Entry (ledgerId:123, entryId:456) → BitSet: [0:ACK, 1:ACK, 2:NACK, 3:ACK, 4:ACK]
   ↓
