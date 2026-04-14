@@ -164,75 +164,6 @@
             </div>
         </div>
 
-        <h2>📅 Timeline: Production (proposalId: 4510983512)</h2>
-
-        <div class="timeline">
-            <div class="timeline-item">
-                <div class="timestamp">21:29:45.872 (Line 222)</div>
-                <span class="pod-name">pay-fpmsapi-canary-6b86fc5b75-gpsdf</span>
-                <p><strong>Message Published</strong></p>
-                <ul>
-                    <li>ProposalId: 4510983512</li>
-                    <li>Topic: persistent://public/default/notify-payment</li>
-                    <li>Pod: pay-fpmsapi-canary (172.18.140.90)</li>
-                    <li>Trace ID: da6f3520d722d1f00ebb4e071d182389</li>
-                </ul>
-            </div>
-
-            <div class="timeline-item">
-                <div class="timestamp">21:30:30.782 (Line 223)</div>
-                <span class="pod-name">pay-callback-857d68f69b-7ctcd</span>
-                <p><strong>Callback Message Published</strong></p>
-                <ul>
-                    <li>ProposalId: 4510983512</li>
-                    <li>Topic: persistent://public/default/notify-payment</li>
-                    <li>Pod: pay-callback (172.18.139.47)</li>
-                    <li>Trace ID: 34e406adfef2f5480fa1938b20b4c9a3</li>
-                    <li><strong>Note:</strong> Different trace ID indicates separate transaction</li>
-                </ul>
-            </div>
-
-            <div class="timeline-item">
-                <div class="timestamp">21:30:30.610 (Line 224)</div>
-                <span class="pod-name">pay-scheduler-common-2-7c94bdf969-48xnj</span>
-                <p><strong>Merchant Balance Update Message Published</strong></p>
-                <ul>
-                    <li>ProposalId: 4510983512</li>
-                    <li>Topic: persistent://public/default/notify-merchant-reload</li>
-                    <li>Pod: pay-scheduler-common-2 (172.18.147.249)</li>
-                    <li>Worker: merchantBalanceSyncPlugin (Worker 4)</li>
-                </ul>
-            </div>
-
-            <div class="timeline-item success">
-                <div class="timestamp">21:31:18.457 (Line 225)</div>
-                <span class="pod-name">pay-scheduler-ec2-56466df69b-9t2gh</span>
-                <span class="worker-badge worker-1">Worker 4 (First Processing)</span>
-                <p><strong>First Processing - Merchant Balance Update</strong></p>
-                <ul>
-                    <li>ProposalId: 4510983512</li>
-                    <li>Pod: pay-scheduler-ec2 (172.18.178.34)</li>
-                    <li>Worker: pulsarUpdateMerchantBalanceWorker (Worker 4)</li>
-                    <li><strong>Time from publish:</strong> 48 seconds</li>
-                    <li><strong>Likely outcome:</strong> Successfully ACKed OR NACKed due to processing error</li>
-                </ul>
-            </div>
-
-            <div class="timeline-item duplicate">
-                <div class="timestamp">21:32:18.590 (Line 226)</div>
-                <span class="pod-name">pay-scheduler-ec2-56466df69b-k2s92</span>
-                <span class="worker-badge worker-2">Worker 4 (Duplicate Processing)</span>
-                <p><strong>🚨 DUPLICATE PROCESSING</strong></p>
-                <ul>
-                    <li>ProposalId: 4510983512</li>
-                    <li>Pod: pay-scheduler-ec2 (172.18.177.84) - <strong>DIFFERENT POD</strong></li>
-                    <li>Worker: pulsarUpdateMerchantBalanceWorker (Worker 4)</li>
-                    <li><strong>Time from first processing:</strong> <span class="highlight">60.133 seconds</span></li>
-                    <li><strong>Root cause:</strong> Entire batch redelivered due to batch-level acknowledgment tracking</li>
-                </ul>
-            </div>
-        </div>
-
         <h2>🔬 Root Cause Analysis</h2>
 
         <h3>The Problem: Batch-Level Acknowledgment Tracking</h3>
@@ -291,7 +222,7 @@
         </table>
 
         <div class="warning">
-            <strong>Key Insight:</strong> The simulation shows continuous redelivery every ~3 seconds because the consumer immediately requests the next batch after processing, triggering rapid redelivery of unacked messages. In production, the 60-second gap is caused by Pulsar's default <code>negativeAckRedeliveryDelay</code> (60 seconds), which was not explicitly configured in <code>pulsarUpdateMerchantBalanceWorker.js</code>. After a message is negatively acknowledged, Pulsar waits exactly 60 seconds before making the entire batch available for redelivery to another worker.
+            <strong>Key Insight:</strong> The simulation shows continuous redelivery every ~3 seconds because the consumer immediately requests the next batch after processing, triggering rapid redelivery of unacked messages. In production, the 60-second gap is caused by Pulsar's default <code>negativeAckRedeliveryDelay</code> (60 seconds), which was not explicitly configured in the consumer. After a message is negatively acknowledged, Pulsar waits exactly 60 seconds before making the entire batch available for redelivery to another worker.
         </div>
 
         <h2>🔧 Technical Deep Dive</h2>
@@ -320,13 +251,13 @@ Broker Cursor Tracking:
 
         <h3>Code References</h3>
 
-        <p><strong>Production Worker:</strong> <code>server/src/scheduler/pulsar/pulsarUpdateMerchantBalanceWorker.js</code></p>
+        <p><strong>Consumer Worker (example):</strong> <code>src/consumer/consumerWorker.js</code></p>
 
         <div class="code-block">
-// Line 84-94: Consumer configuration (MISSING batchIndexAckEnabled and negativeAckRedeliveryDelay)
+// Consumer configuration (MISSING batchIndexAckEnabled and negativeAckRedeliveryDelay)
 consumer = await client.subscribe({
-    topic: config?.NOTIFY_MERCHANT_RELOAD,
-    subscription: 'pmsUserUpdateMerchantBalance',
+    topic: 'tx7',
+    subscription: 'tx8',
     subscriptionType: 'Shared',
     ackTimeoutMs: USER_ACK_TIMEOUT_MS ? USER_ACK_TIMEOUT_MS : derivedAckTimeoutMs,
     receiverQueueSize: BATCH_SIZE,
@@ -336,7 +267,7 @@ consumer = await client.subscribe({
         timeoutMs: TIMEOUT_MS
     }
     // ❌ MISSING: batchIndexAckEnabled: true
-    // ❌ MISSING: negativeAckRedeliveryDelay: <custom_value> (defaults to 60000ms)
+    // ❌ MISSING: negativeAckRedeliveryDelay: 60000 (defaults to 60000ms)
 });
 
 // Line 139, 159, 181: Negative acknowledgment calls
@@ -427,33 +358,6 @@ consumer.negativeAcknowledge(m);  // Triggers batch-level redelivery after 60s (
             <p><strong>Result:</strong> Duplicates only appear when a batch contains at least one failure. With a low failure rate (~0.1%), most batches process successfully without duplicates.</p>
         </div>
 
-        <h3>Production Impact Calculation</h3>
-
-        <div class="metric">
-            <div>Batch Size</div>
-            <div class="metric-value">4000 messages</div>
-        </div>
-        <div class="metric">
-            <div>Failure Rate</div>
-            <div class="metric-value">~0.1% - 1%</div>
-        </div>
-        <div class="metric">
-            <div>Affected Batches</div>
-            <div class="metric-value">~10-100 per day</div>
-        </div>
-        <div class="metric">
-            <div>Duplicate Messages</div>
-            <div class="metric-value">40,000 - 400,000 per day</div>
-        </div>
-
-        <p><strong>Why the impact is significant despite low failure rate:</strong></p>
-        <ul>
-            <li>Each failed message causes 3999 successful messages to be reprocessed</li>
-            <li>Wasted processing: 99.975% of redelivered messages</li>
-            <li>Risk: Incorrect merchant balance calculations from duplicate updates</li>
-            <li>Load: Unnecessary database operations and CPU usage</li>
-        </ul>
-
         <h2>🎯 Solution Implementation</h2>
 
         <h3>1. Broker Configuration (Critical)</h3>
@@ -472,12 +376,12 @@ broker:
 
         <h3>2. Consumer Configuration (Recommended)</h3>
 
-        <p>Update <code>server/src/scheduler/pulsar/pulsarUpdateMerchantBalanceWorker.js</code> line 84:</p>
+        <p>Update your consumer subscribe options:</p>
 
         <div class="code-block">
 consumer = await client.subscribe({
-    topic: config?.NOTIFY_MERCHANT_RELOAD,
-    subscription: 'pmsUserUpdateMerchantBalance',
+    topic: 'tx1',
+    subscription: 'tx2',
     subscriptionType: 'Shared',
     ackTimeoutMs: USER_ACK_TIMEOUT_MS ? USER_ACK_TIMEOUT_MS : derivedAckTimeoutMs,
     batchIndexAckEnabled: true,  // ✅ ADD THIS LINE - Enables per-message ack tracking
@@ -491,7 +395,7 @@ consumer = await client.subscribe({
 });
         </div>
 
-        <p><strong>Note:</strong> The <code>negativeAckRedeliveryDelay</code> parameter is optional (defaults to 60000ms). Making it explicit improves code clarity and explains the 60-second duplicate pattern observed in production logs.</p>
+        <p><strong>Note:</strong> The <code>negativeAckRedeliveryDelay</code> parameter is optional (defaults to 60000ms). Making it explicit improves code clarity when analyzing redelivery timing.</p>
 
         <h3>3. Verification Steps</h3>
 
@@ -580,58 +484,6 @@ consumer = await client.subscribe({
         <div class="success">
             <strong>Fix Verified:</strong> With batch index acknowledgment enabled, only msg-3 is redelivered. Messages 1, 2, 4, 5 are never redelivered, preventing duplicate processing.
         </div>
-
-        <h2>🎯 Production Impact</h2>
-
-        <h3>Current Production Behavior</h3>
-
-        <p>Based on the production logs showing 60-second redelivery interval:</p>
-
-        <ol>
-            <li><strong>Batch Processing:</strong> Worker 4 (pod: pay-scheduler-ec2-56466df69b-9t2gh) receives a batch containing proposalId 4510983512 and potentially hundreds/thousands of other proposals</li>
-            <li><strong>Mixed Results:</strong> Most proposals process successfully and are acknowledged, but one or more fail (e.g., OCC failure, validation error, network timeout)</li>
-            <li><strong>Negative Acknowledgment:</strong> Failed proposals are negatively acknowledged</li>
-            <li><strong>Batch-Level Tracking:</strong> Broker marks the entire batch as unacknowledged</li>
-            <li><strong>60-Second Delay:</strong> After negative ack redelivery delay (60s), the entire batch is redelivered</li>
-            <li><strong>Different Worker:</strong> Worker 4 (different pod: pay-scheduler-ec2-56466df69b-k2s92) receives the redelivered batch</li>
-            <li><strong>Duplicate Processing:</strong> All messages in the batch, including successfully processed ones like proposalId 4510983512, are processed again</li>
-        </ol>
-
-        <h3>Why 60 Seconds in Production vs 3 Seconds in Simulation?</h3>
-
-        <table>
-            <thead>
-                <tr>
-                    <th>Factor</th>
-                    <th>Simulation</th>
-                    <th>Production</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td><strong>Redelivery Trigger</strong></td>
-                    <td>Batch receive timeout (10s)</td>
-                    <td>Negative ack redelivery delay (60s)</td>
-                </tr>
-                <tr>
-                    <td><strong>Worker Load</strong></td>
-                    <td>Low - workers immediately request next batch</td>
-                    <td>High - workers busy processing large batches (4000 messages)</td>
-                </tr>
-                <tr>
-                    <td><strong>Message Volume</strong></td>
-                    <td>5 messages total</td>
-                    <td>Thousands of messages per batch</td>
-                </tr>
-                <tr>
-                    <td><strong>Processing Time</strong></td>
-                    <td>Instant (no actual processing)</td>
-                    <td>Seconds to minutes (DB updates, OCC checks)</td>
-                </tr>
-            </tbody>
-        </table>
-
-        <p><strong>Conclusion:</strong> The 60-second gap in production is directly caused by Pulsar's default <code>negativeAckRedeliveryDelay</code> setting (60 seconds), which was not overridden in the consumer configuration. When a message is negatively acknowledged, Pulsar enforces this delay before redelivering the batch. The simulation shows faster redelivery (~3s) because messages are redelivered as soon as the consumer requests the next batch via <code>batchReceive()</code>, bypassing the negative ack delay mechanism.</p>
 
         <h2>🔍 Related GitHub Issues & Pull Requests</h2>
 
